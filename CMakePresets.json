@@ -8,8 +8,8 @@
       {
           "name": "cache-variables",
           "cacheVariables": {
-              "CMAKE_C_COMPILER": "clang",
-              "CMAKE_CXX_COMPILER": "clang++",
+              "CMAKE_C_COMPILER": "/Users/booklove/Desktop/Programming/llvm-project/build/bin/clang",
+              "CMAKE_CXX_COMPILER": "/Users/booklove/Desktop/Programming/llvm-project/build/bin/clang++",
               "LLVM_DIR": "$env{LLVM_BUILD_DIR}/lib/cmake/llvm",
 
               "BUILD_SHARED_LIBS": "On",
@@ -25,7 +25,9 @@
           "displayName": "Base-Debug",
           "generator": "Ninja",
           "binaryDir": "${sourceDir}/../topt-build-debug/",
-          "environment": {},
+          "environment": {
+            "LLVM_BUILD_DIR": "/Users/booklove/Desktop/Programming/llvm-project/build"
+          },
           "cacheVariables": {
               "CMAKE_BUILD_TYPE": "Debug"
           }
