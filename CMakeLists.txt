@@ -35,6 +35,6 @@ set(TOPT_INCLUDE_DIRS ${TOPT_SOURCE_DIR}/include)
 
 include_directories(AFTER ${TOPT_INCLUDE_DIRS})
 
-add_subdirectory(lib)
+# add_subdirectory(lib)
 add_subdirectory(tools)
 add_subdirectory(test)

@@ -10,7 +10,7 @@ configure_lit_site_cfg(
 set(LLVM_TEST_DEPENDS
           FileCheck
           not
-          topt
+          # topt
         )
 
 
