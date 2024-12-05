@@ -22,7 +22,6 @@ void verify() {
 }
 
 void emitExternalFunctions() {
-  // Declare printf and other functions
   FunctionType *PrintfType = FunctionType::get(Builder->getInt64Ty(), {Builder->getInt8Ty()->getPointerTo()}, true);
   Function::Create(PrintfType, Function::ExternalLinkage, "printf", *TheModule);
 
@@ -42,7 +41,6 @@ void emitExternalFunctions() {
 }
 
 void emitConstants() {
-  // Define global string constants
   Constant *StrArraySize = ConstantDataArray::getString(*Context, "Initializing array with size of: %llu bytes \n\00");
   GlobalVariable *StrArraySizeGV = new GlobalVariable(*TheModule, StrArraySize->getType(), true, GlobalValue::PrivateLinkage, StrArraySize, ".str_array_size");
   StrArraySizeGV->setAlignment(Align(1));
