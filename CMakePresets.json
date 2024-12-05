@@ -11,7 +11,6 @@
               "CMAKE_C_COMPILER": "clang",
               "CMAKE_CXX_COMPILER": "clang++",
               "LLVM_DIR": "$env{LLVM_BUILD_DIR}/lib/cmake/llvm",
-
               "BUILD_SHARED_LIBS": "On",
               "LLVM_USE_LINKER": "lld",
               "LLVM_ENABLE_RTTI": "On",
@@ -25,7 +24,9 @@
           "displayName": "Base-Debug",
           "generator": "Unix Makefiles",
           "binaryDir": "${sourceDir}/../topt-build-debug/",
-          "environment": {},
+          "environment": {
+            "CMAKE_CXX_FLAGS": "-fsanitize=address -O0 -g"
+          },
           "cacheVariables": {
               "CMAKE_BUILD_TYPE": "Debug"
           }
