@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20.0)
 project(topt C CXX ASM)
 
 option(BUILD_SHARED_LIBS
-  "Build all libraries as shared libraries instead of static" OFF)
+  "Build all libraries as shared libraries instead of static" ON)
 option(LLVM_BUILD_TOOLS
   "Build the LLVM tools. If OFF, just generate build targets." ON)
 
@@ -28,8 +28,7 @@ include_directories(${LLVM_INCLUDE_DIRS})
 
 add_definitions(${LLVM_DEFINITIONS})
 
-add_compile_options(-fsanitize=address -O0 -g)
-add_link_options(-fsanitize=address -O0 -g)
+add_compile_options(-O0 -g)
 
 set(TOPT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(TOPT_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
@@ -38,6 +37,6 @@ set(TOPT_INCLUDE_DIRS ${TOPT_SOURCE_DIR}/include)
 
 include_directories(AFTER ${TOPT_INCLUDE_DIRS})
 
-# add_subdirectory(lib)
+add_subdirectory(lib)
 add_subdirectory(tools)
 add_subdirectory(test)

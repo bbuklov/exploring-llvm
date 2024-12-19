@@ -8,8 +8,8 @@
       {
           "name": "cache-variables",
           "cacheVariables": {
-              "CMAKE_C_COMPILER": "clang",
-              "CMAKE_CXX_COMPILER": "clang++",
+              "CMAKE_C_COMPILER": "$env{LLVM_BUILD_DIR}/bin/clang",
+              "CMAKE_CXX_COMPILER": "$env{LLVM_BUILD_DIR}/bin/clang++",
               "LLVM_DIR": "$env{LLVM_BUILD_DIR}/lib/cmake/llvm",
               "BUILD_SHARED_LIBS": "On",
               "LLVM_USE_LINKER": "lld",
@@ -25,7 +25,7 @@
           "generator": "Unix Makefiles",
           "binaryDir": "${sourceDir}/../topt-build-debug/",
           "environment": {
-            "CMAKE_CXX_FLAGS": "-fsanitize=address -O0 -g"
+            "CMAKE_CXX_FLAGS": "-O0 -g"
           },
           "cacheVariables": {
               "CMAKE_BUILD_TYPE": "Debug"
@@ -35,7 +35,7 @@
           "name": "Base-Release",
           "inherits":["cache-variables"],
           "displayName": "Base-Release",
-          "generator": "Ninja",
+          "generator": "Unix Makefiles",
           "binaryDir": "${sourceDir}/../topt-build-release",
           "environment": {},
           "cacheVariables": {
