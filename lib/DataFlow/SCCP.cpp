@@ -34,12 +34,10 @@ using namespace llvm;
 
 #define DEBUG_TYPE "SparseCondConstProp"
 
-/**
- * @todo: Try to use it.
- * It is optional.
- * STATISTIC(sccpCount, "TODO!");
- */
-
+STATISTIC(NumInstRemoved, "Number of instructions removed");
+STATISTIC(NumDeadBlocks , "Number of basic blocks unreachable");
+STATISTIC(NumInstReplaced,
+          "Number of instructions replaced with (simpler) instruction");
 namespace llvm::trainOpt {
 static bool tryToReplaceWithConstant(Solver &Solver, Value *V) {
   assert(!V->getType()->isStructTy() && "Structure type is not supported!");
@@ -67,27 +65,36 @@ static bool runSCCP(Function &F, const DataLayout &DL,
 
   Solver.solve();
 
+  bool MadeChanges = false;
+
   for (auto &BB : F) {
-    /**
-     *  @todo: Insert your code here!
-     *  1. We need to check whether the BasicBlock is executable.
-     *     If the BasicBlock is not executable, we need
-     *     to remove its instructions.
-     *
-     *  2. If the BasicBlock is executable, we need to check whether
-     *     it is possible to replace every instruction from
-     *     the BasicBlock with constant. If it is possible, replace it.
-     *     It is recommended to use the `tryToReplaceWithConstant`,
-     *     `isInstructionTriviallyDead` methods.
-     *     To delete Instruction from the BasicBlock use the
-     *     @code eraseFromParent @endcode method of the class
-     *     @code Instruction @endcode.
-     */
+    if (!Solver.isBlockExecutable(&BB)) {
+      LLVM_DEBUG(dbgs() << "  BasicBlock Dead:" << BB);
+      NumDeadBlocks++;
+      for (Instruction &I : BB) {
+        I.eraseFromParent();
+        NumInstRemoved++;
+      }
+      MadeChanges = true;
+      continue;
+    }
+
+    for (Instruction &I : BB) {
+      if (tryToReplaceWithConstant(Solver, &I)) {
+        NumInstReplaced++;
+        MadeChanges = true;
+      }
+      if (isInstructionTriviallyDead(&I)){
+        I.eraseFromParent();
+        NumInstRemoved++;
+        MadeChanges = true;
+      }
+    }
   }
-  /**
-   *  @todo: Insert your code here!
-   *  Return true, if the pass makes changes, otherwise return false.
-   */
+
+  if (MadeChanges)
+    return true;
+
   return false;
 }
 

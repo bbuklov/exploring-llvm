@@ -13,6 +13,7 @@
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/Local.h>
+#include "llvm/Analysis/InstructionSimplify.h"
 
 #include "topt/DataFlow/SCCPSolver.h"
 
@@ -26,23 +27,20 @@ void Solver::solve() {
 
     while (!OverdefinedInstWorkList.empty()) {
       auto *I = OverdefinedInstWorkList.pop_back_val();
-      /**
-       *  @todo: Insert your code here!
-       */
+      markUsersAsChanged(I);
     }
 
     while (!InstWorkList.empty()) {
       auto *I = InstWorkList.pop_back_val();
-      /**
-       *  @todo: Insert your code here!
-       */
+      
+      if (I->getType()->isStructTy() || !getValueState(I).isOverdefined())
+        markUsersAsChanged(I);
     }
 
     while (!BBWorkList.empty()) {
       auto *BB = BBWorkList.pop_back_val();
-      /**
-       *  @todo: Insert your code here!
-       */
+      
+      visit(BB);
     }
   }
 }
@@ -73,7 +71,7 @@ bool Solver::isBlockExecutable(BasicBlock *BB) {
 const LatticeVal &Solver::getLatticeValueFor(Value *V) const {
   const auto I = ValueState.find(V);
   if (I == ValueState.end()) {
-    V->dump();
+    V->print(outs());
   }
   assert(I != ValueState.end() && "V is not found in ValueState");
   return I->second;
@@ -88,52 +86,102 @@ void Solver::visitBinaryOperator(Instruction &I) {
   LatticeVal V2State = getValueState(I.getOperand(1));
 
   LatticeVal &IV = ValueState[&I];
-  if (IV.isOverdefined()) {
-    /**
-     *  @todo: Insert your code here!
-     */
-  }
+  if (IV.isOverdefined())
+    return;
 
   if (V1State.isConstant() && V2State.isConstant()) {
-    /**
-     *  @todo: Insert your code here!
-     */
+    Value *R = simplifyBinOp(
+      I.getOpcode(),
+      V1State.getConstant(),
+      V2State.getConstant(),\
+      SimplifyQuery(DL, &I)
+    );
+    Constant *C = dyn_cast<Constant>(R);
+    markConstant(&I, C);
+
+    return;
   }
 
   if (!V1State.isOverdefined() && !V2State.isOverdefined()) {
-    /**
-     *  @todo: Insert your code here!
-     */
+    markOverdefined(&I);
   }
   /**
    *  @todo: Insert your code here!
+   * ???
    */
 }
 
 void Solver::visitCmpInst(CmpInst &I) {
-  /**
-   *  @todo: Insert your code here!
-   */
+  LatticeVal &IV = ValueState[&I];
+
+  if (IV.isOverdefined())
+    return (void)markOverdefined(&I);
+ 
+  Value *Op1 = I.getOperand(0);
+  Value *Op2 = I.getOperand(1);
+ 
+  auto V1State = getValueState(Op1);
+  auto V2State = getValueState(Op2);
+ 
+  if (V1State.isConstant() && V2State.isConstant()) {
+    Value *R = simplifyCmpInst(
+      I.getOpcode(),
+      V1State.getConstant(),
+      V2State.getConstant(),\
+      SimplifyQuery(DL, &I)
+    );
+    Constant *C = dyn_cast<Constant>(R);
+    markConstant(&I, C);
+
+    return;
+  }
+ 
+  // If operands are still unknown, wait for it to resolve.
+  if ((V1State.isUnknown() || V2State.isUnknown()) &&
+      (!IV.isConstant()))
+    return;
+ 
+  markOverdefined(&I);
 }
 
 void Solver::visitTerminator(Instruction &I) {
-  /**
-   *  @todo: Insert your code here!
-   */
+  SmallVector<bool, 16> SuccFeasible;
+  getFeasibleSuccessors(I, SuccFeasible);
+ 
+  BasicBlock *BB = I.getParent();
+ 
+  // Mark all feasible successors executable.
+  for (unsigned i = 0, e = SuccFeasible.size(); i != e; ++i)
+    if (SuccFeasible[i])
+      markEdgeExecutable(BB, I.getSuccessor(i));
 }
 
 void Solver::visitPHINode(PHINode &PN) {
-  /**
-   *  @todo: Insert your code here!
-   */
+  if (PN.getType()->isStructTy())
+    return (void)markOverdefined(&PN);
+ 
+  if (getValueState(&PN).isOverdefined())
+    return;
+ 
+  if (PN.getNumIncomingValues() > 64)
+    return (void)markOverdefined(&PN);
+ 
+  LatticeVal PhiState = getValueState(&PN);
   for (unsigned i = 0; i < PN.getNumIncomingValues(); i++) {
     LatticeVal &IV = getValueState(PN.getIncomingValue(i));
     if (IV.isUnknown()) {
       continue;
     }
-    /**
-     *  @todo: Insert your code here!
-     */
+    if (!isEdgeFeasible(PN.getIncomingBlock(i), PN.getParent()))
+      continue;
+
+    if (IV.isOverdefined()) {
+      PhiState.markOverdefined();
+    }
+
+    if (IV.isConstant()) {
+      PhiState.markConstant(IV.getConstant());
+    }
   }
 }
 
