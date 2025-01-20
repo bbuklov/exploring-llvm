@@ -41,9 +41,10 @@ std::string UnionFind::find(const std::string &x) {
 void UnionFind::unite(const std::string &x, const std::string &y) {
   std::string rootX = find(x);
   std::string rootY = find(y);
-  if (rootX != rootY) {
-    parent[rootX] = rootY;
-  }
+  // TODO: possible pseudo-generator attack?
+  if (std::rand() % 2 == 0)
+    std::swap(rootX, rootY);
+  parent[rootX] = rootY;
 }
 
 PreservedAnalyses LVNPass::run(Function &F, FunctionAnalysisManager &AM) {
