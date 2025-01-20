@@ -80,7 +80,7 @@ static bool runSCCP(Function &F, const DataLayout &DL,
     }
 
     for (Instruction &I : BB) {
-      if (tryToReplaceWithConstant(Solver, &I)) {
+      if (!I.isTerminator() && tryToReplaceWithConstant(Solver, &I)) {
         NumInstReplaced++;
         MadeChanges = true;
       }
@@ -92,10 +92,7 @@ static bool runSCCP(Function &F, const DataLayout &DL,
     }
   }
 
-  if (MadeChanges)
-    return true;
-
-  return false;
+  return MadeChanges ? true : false;
 }
 
 PreservedAnalyses SCCPPass::run(Function &F, FunctionAnalysisManager &AM) {

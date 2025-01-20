@@ -28,6 +28,9 @@ void Solver::solve() {
     while (!OverdefinedInstWorkList.empty()) {
       auto *I = OverdefinedInstWorkList.pop_back_val();
       markUsersAsChanged(I);
+      outs() << "Marked users of overdefined instruction ";
+      I->print(outs());
+      outs() << " as changed." << "\n";
     }
 
     while (!InstWorkList.empty()) {
@@ -35,36 +38,58 @@ void Solver::solve() {
       
       if (I->getType()->isStructTy() || !getValueState(I).isOverdefined())
         markUsersAsChanged(I);
+        outs() << "Marked users of ";
+        I->print(outs());
+        outs() << " as changed.\n";
     }
 
     while (!BBWorkList.empty()) {
       auto *BB = BBWorkList.pop_back_val();
       
       visit(BB);
+      outs() << "Visited basic block ";
+      BB->print(outs());
+      outs() << "\n";
     }
   }
 }
 
 bool Solver::markBlockExecutable(BasicBlock *BB) {
   if (!BBExecutable.insert(BB).second) {
+    outs() << "Basic block ";
+    BB->print(outs());
+    outs() << " is not marked as executable (already is).\n";
     return false;
   }
   BBWorkList.push_back(BB); // Add the block to the worklist!
+  outs() << "Marked basic block ";
+  BB->print(outs());
+  outs() << " as executable.\n";
   return true;
 }
 
 void Solver::markOverdefined(Value *V) {
   if (auto *STy = dyn_cast<StructType>(V->getType())) {
     assert(false && "StructType is unsupported!");
+    outs() << "StructType is unsupported!\n";
   } else {
     markOverdefined(ValueState[V], V);
+    outs() << "Marked value ";
+    V->print(outs());
+    outs() << " as overdefined.\n";
   }
 }
 
 bool Solver::isBlockExecutable(BasicBlock *BB) {
   if (BBExecutable.count(BB)) {
+    outs() << "Basic block ";
+    BB->print(outs());
+    outs() << " is executable.\n";
     return true;
   }
+  outs() << "Basic block ";
+  BB->print(outs());
+  outs() << " is not executable.\n";
   return false;
 }
 
@@ -73,6 +98,9 @@ const LatticeVal &Solver::getLatticeValueFor(Value *V) const {
   if (I == ValueState.end()) {
     V->print(outs());
   }
+  outs() << "Got lattice value " << I->getSecond().getConstantInt() << " for value ";
+  V->print(outs());
+  outs() << "\n";
   assert(I != ValueState.end() && "V is not found in ValueState");
   return I->second;
 }
@@ -82,14 +110,21 @@ const LatticeVal &Solver::getLatticeValueFor(Value *V) const {
  */
 
 void Solver::visitBinaryOperator(Instruction &I) {
+  outs() << "Visited binary operator instruction ";
+  I.print(outs());
+  outs() << "\n";
   LatticeVal V1State = getValueState(I.getOperand(0));
   LatticeVal V2State = getValueState(I.getOperand(1));
 
   LatticeVal &IV = ValueState[&I];
-  if (IV.isOverdefined())
+  if (IV.isOverdefined()) {
+    outs() << "Instruction already marked as overdefined\n";
+    // Fast exit
     return;
+  }
 
   if (V1State.isConstant() && V2State.isConstant()) {
+    // Try to calculate value from two constants
     Value *R = simplifyBinOp(
       I.getOpcode(),
       V1State.getConstant(),
@@ -98,53 +133,88 @@ void Solver::visitBinaryOperator(Instruction &I) {
     );
     Constant *C = dyn_cast<Constant>(R);
     markConstant(&I, C);
+    outs() << "Calculated new constant value ";
+    C->print(outs());
+    outs() << " for instruction.\n";
 
     return;
   }
 
   if (!V1State.isOverdefined() && !V2State.isOverdefined()) {
-    markOverdefined(&I);
+    // One of operand is a constant, another is unknown
+    // Treat resulting value as constant then
+    if (V1State.isConstant()) {
+      markConstant(&I, V1State.getConstant());
+      outs() << "Marked instruction as constant " << V1State.getConstantInt() << "\n";
+    } else {
+      markConstant(&I, V2State.getConstant());
+      outs() << "Marked instruction as constant " << V2State.getConstantInt() << "\n";
+    }
+
+    return;
   }
-  /**
-   *  @todo: Insert your code here!
-   * ???
-   */
+  // One of operands is overdefined
+  // Resultring value is overdefined also then
+  markOverdefined(&I);
+  outs() << "Marked instruction as overdefined.\n";
 }
 
 void Solver::visitCmpInst(CmpInst &I) {
-  LatticeVal &IV = ValueState[&I];
+  outs() << "Visited cmp operator instruction ";
+  I.print(outs());
+  outs() << ".\n";
 
-  if (IV.isOverdefined())
-    return (void)markOverdefined(&I);
- 
-  Value *Op1 = I.getOperand(0);
-  Value *Op2 = I.getOperand(1);
- 
-  auto V1State = getValueState(Op1);
-  auto V2State = getValueState(Op2);
+  LatticeVal V1State = getValueState(I.getOperand(0));
+  LatticeVal V2State = getValueState(I.getOperand(1));
+
+  LatticeVal &IV = ValueState[&I];
+  if (IV.isOverdefined()) {
+    outs() << "Instruction already marked as overdefined.\n";
+    // Fast exit
+    return;
+  }
  
   if (V1State.isConstant() && V2State.isConstant()) {
+    // Try to calculate instruction from 2 constants
     Value *R = simplifyCmpInst(
-      I.getOpcode(),
+      I.getPredicate(),
       V1State.getConstant(),
       V2State.getConstant(),\
       SimplifyQuery(DL, &I)
     );
     Constant *C = dyn_cast<Constant>(R);
     markConstant(&I, C);
+    outs() << "Calculated new constant value ";
+    C->print(outs());
+    outs() << " for instruction.\n";
 
     return;
   }
  
-  // If operands are still unknown, wait for it to resolve.
-  if ((V1State.isUnknown() || V2State.isUnknown()) &&
-      (!IV.isConstant()))
+  if (!V1State.isOverdefined() && !V2State.isOverdefined()) {
+    // One of operand is a constant, another is unknown
+    // Treat resulting value as constant then
+    if (V1State.isConstant()) {
+      markConstant(&I, V1State.getConstant());
+      outs() << "Marked instruction as constant " << V1State.getConstantInt() << "\n";
+    } else {
+      markConstant(&I, V2State.getConstant());
+      outs() << "Marked instruction as constant " << V2State.getConstantInt() << "\n";
+    }
+
     return;
- 
+  }
+
+  // One of operands is overdefined
+  // Resultring value is overdefined also then
   markOverdefined(&I);
+  outs() << "Marked instruction as overdefined.\n";
 }
 
 void Solver::visitTerminator(Instruction &I) {
+  outs() << "Visited terminator instruction ";
+  I.print(outs());
+  outs() << "\n";
   SmallVector<bool, 16> SuccFeasible;
   getFeasibleSuccessors(I, SuccFeasible);
  
@@ -152,17 +222,33 @@ void Solver::visitTerminator(Instruction &I) {
  
   // Mark all feasible successors executable.
   for (unsigned i = 0, e = SuccFeasible.size(); i != e; ++i)
-    if (SuccFeasible[i])
+    if (SuccFeasible[i]) {
       markEdgeExecutable(BB, I.getSuccessor(i));
+      outs() << "Marked edge ";
+      I.getSuccessor(i)->print(outs());
+      outs() << " as executable.\n";
+    }
 }
 
 void Solver::visitPHINode(PHINode &PN) {
-  if (PN.getType()->isStructTy())
+  outs() << "Visited phi instruction ";
+  PN.print(outs());
+  outs() << ".\n";
+
+  // Structs are not supported
+  if (PN.getType()->isStructTy()) {
+    outs() << "Structs are not supported.";
     return (void)markOverdefined(&PN);
- 
-  if (getValueState(&PN).isOverdefined())
+  }
+  
+  // Fast exit
+  if (getValueState(&PN).isOverdefined()) {
+    outs() << "Instruction already marked as overdefined\n";
     return;
- 
+  }
+  
+  // Super-extra-high-degree PHI nodes are unlikely to ever be marked constant,
+  // and slow us down a lot.  Just mark them overdefined. (Taken from orig llvm code)
   if (PN.getNumIncomingValues() > 64)
     return (void)markOverdefined(&PN);
  
@@ -170,17 +256,33 @@ void Solver::visitPHINode(PHINode &PN) {
   for (unsigned i = 0; i < PN.getNumIncomingValues(); i++) {
     LatticeVal &IV = getValueState(PN.getIncomingValue(i));
     if (IV.isUnknown()) {
+      outs() << "Skipped edge ";
+      PN.getIncomingBlock(i)->print(outs());
+      outs() << " as it's value is unknown.";
       continue;
     }
-    if (!isEdgeFeasible(PN.getIncomingBlock(i), PN.getParent()))
+    // Skip all not executable operands
+    if (!isEdgeFeasible(PN.getIncomingBlock(i), PN.getParent())) {
+      outs() << "Skipped edge ";
+      PN.getIncomingBlock(i)->print(outs());
+      outs() << " as it is not feasible.";
       continue;
+    }
 
+    // If some of incoming value is overdefined -
+    // then the phi-node value is also overdefined (conservative way)
+    // Stop calculation - we know for sure it is not a constant
     if (IV.isOverdefined()) {
       PhiState.markOverdefined();
+      outs() << "Marked instruction as overdefined.\n";
+      break;
     }
 
+    // If incoming value is constant -
+    // then mark phi-node value is constant also
     if (IV.isConstant()) {
       PhiState.markConstant(IV.getConstant());
+      outs() << "Marked instruction as constant " << IV.getConstantInt() << "\n";
     }
   }
 }
